@@ -36,14 +36,16 @@ export default function AIChat() {
 
       setMessages((prev) => [...prev, aiReply]);
     } catch (error) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          sender: "ai",
-          text: "❌ Failed to connect with AI.",
-        },
-      ]);
-    }
+  console.log("===== GEMINI ERROR =====");
+  console.log("Status:", error.response?.status);
+  console.log("Data:", error.response?.data);
+  console.log("Message:", error.message);
+
+  res.status(500).json({
+    success: false,
+    message: error.response?.data || error.message,
+  });
+}
 
     setLoading(false);
     setMessage("");

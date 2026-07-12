@@ -7,7 +7,8 @@ import authRoutes from "./routes/authRoutes.js";
 import skillRoutes from "./routes/skillRoutes.js";
 import aiRoutes from "./routes/aiRoutes.js";
 dotenv.config();
-console.log("Gemini Key:", process.env.GEMINI_API_KEY);
+console.log("JWT:", process.env.JWT_SECRET);
+console.log("Gemini:", process.env.GEMINI_API_KEY);
 
 connectDB();
 

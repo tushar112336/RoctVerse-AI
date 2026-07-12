@@ -37,6 +37,35 @@ const updateUserProgress = async (
 };
 
 // =======================
+// Ask AI Function
+// =======================
+
+const askAI = async (prompt) => {
+  const response = await axios.post(
+    "https://api.groq.com/openai/v1/chat/completions",
+    {
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      temperature: 0.7,
+      max_tokens: 2000,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  return response.data.choices[0].message.content;
+};
+
+// =======================
 // AI Skill Analyzer
 // =======================
 
@@ -69,24 +98,8 @@ Give:
 7. Salary Estimate in India
 `;
 
-    const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        contents: [
-          {
-            parts: [
-              {
-                text: prompt,
-              },
-            ],
-          },
-        ],
-      }
-    );
-    
+    const analysis = await askAI(prompt);
 
-
-    // Dashboard Score Update
     await updateUserProgress(req.user.id, {
       career: 5,
       progress: 5,
@@ -94,27 +107,20 @@ Give:
 
     res.json({
       success: true,
-      analysis:
-        response.data.candidates[0].content.parts[0].text,
+      analysis,
     });
 
   } catch (error) {
 
-    console.log(
-      "AI ERROR:",
-      error.response?.data || error.message
-    );
+    console.log("AI ERROR:", error.response?.data || error.message);
 
     res.status(500).json({
       success: false,
-      message:
-        error.response?.data?.error?.message ||
-        error.message,
+      message: error.response?.data || error.message,
     });
 
   }
 };
-
 // =======================
 // AI Resume Analyzer
 // =======================
@@ -129,9 +135,7 @@ export const analyzeResume = async (req, res) => {
       });
     }
 
-    const resumeText = await extractTextFromPDF(
-      req.file.buffer
-    );
+    const resumeText = await extractTextFromPDF(req.file.buffer);
 
     const prompt = `
 You are an ATS Resume Expert.
@@ -154,43 +158,28 @@ Return:
 Format the response nicely.
 `;
 
-    const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        contents: [
-          {
-            parts: [
-              {
-                text: prompt,
-              },
-            ],
-          },
-        ],
-      }
-    );
-    const text = response.data.candidates[0].content.parts[0].text;
+    const analysis = await askAI(prompt);
 
-// ATS Score nikalna
-let atsScore = 0;
+    const match = analysis.match(/\b(\d{1,3})\b/);
 
-const scoreMatch = text.match(/ATS\s*Score\s*[:\-]?\s*(\d{1,3})/i);
+    const atsScore = match ? Number(match[1]) : 0;
+    const user = await User.findById(req.user.id);
 
-if (scoreMatch) {
-  atsScore = Number(scoreMatch[1]);
+if (!user) {
+  return res.status(404).json({
+    success: false,
+    message: "User not found",
+  });
 }
-
-const user = await User.findById(req.user.id);
 
 user.resumeHistory.push({
   fileName: req.file.originalname,
   atsScore: atsScore,
-  analysis: text,
+  analyzedAt: new Date(),
 });
 
 await user.save();
-  await user.save();
 
-    // Dashboard Score Update
     await updateUserProgress(req.user.id, {
       resume: 20,
       progress: 10,
@@ -198,35 +187,38 @@ await user.save();
 
     res.json({
       success: true,
-      analysis:
-        response.data.candidates[0].content.parts[0].text,
+      atsScore,
+      analysis,
     });
 
   } catch (error) {
 
-    console.log(error);
+    console.log("Resume AI Error:", error.response?.data || error.message);
 
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: error.response?.data || error.message,
     });
 
   }
 };
+
 // =======================
 // AI Interview Questions
 // =======================
 
 export const generateInterviewQuestions = async (req, res) => {
   try {
+
     const { role, experience } = req.body;
 
     const prompt = `
 You are a Senior Technical Interviewer.
 
-Generate 15 interview questions for:
+Generate 15 interview questions.
 
 Role: ${role}
+
 Experience: ${experience} years
 
 Include:
@@ -239,18 +231,8 @@ Include:
 Return in numbered list.
 `;
 
-    const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        contents: [
-          {
-            parts: [{ text: prompt }],
-          },
-        ],
-      }
-    );
+    const questions = await askAI(prompt);
 
-    // Dashboard Score Update
     await updateUserProgress(req.user.id, {
       career: 10,
       progress: 10,
@@ -258,26 +240,25 @@ Return in numbered list.
 
     res.json({
       success: true,
-      questions:
-        response.data.candidates[0].content.parts[0].text,
+      questions,
     });
 
   } catch (error) {
 
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: error.response?.data || error.message,
     });
 
   }
 };
-
 // =======================
 // Career Recommendation
 // =======================
 
 export const careerRecommendation = async (req, res) => {
   try {
+
     const { skills, experience, goal } = req.body;
 
     const prompt = `
@@ -287,7 +268,7 @@ Student Skills:
 ${skills}
 
 Experience:
-${experience}
+${experience} years
 
 Career Goal:
 ${goal}
@@ -302,18 +283,8 @@ Provide:
 6. Future Scope
 `;
 
-    const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        contents: [
-          {
-            parts: [{ text: prompt }],
-          },
-        ],
-      }
-    );
+    const recommendation = await askAI(prompt);
 
-    // Dashboard Score Update
     await updateUserProgress(req.user.id, {
       career: 5,
       progress: 5,
@@ -321,15 +292,14 @@ Provide:
 
     res.json({
       success: true,
-      recommendation:
-        response.data.candidates[0].content.parts[0].text,
+      recommendation,
     });
 
   } catch (error) {
 
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: error.response?.data || error.message,
     });
 
   }
@@ -341,12 +311,11 @@ Provide:
 
 export const generateRoadmap = async (req, res) => {
   try {
+
     const { goal, experience } = req.body;
 
     const prompt = `
-You are an Expert Software Mentor.
-
-Create a detailed learning roadmap.
+Create a detailed 30-Day Learning Roadmap.
 
 Goal:
 ${goal}
@@ -354,47 +323,33 @@ ${goal}
 Experience:
 ${experience} years
 
-Generate:
+Include:
 
-1. 30-Day Learning Plan
-2. Week 1 Topics
-3. Week 2 Topics
-4. Week 3 Topics
-5. Week 4 Topics
-6. Best Projects to Build
-7. Best Free Resources
-8. Interview Preparation Tips
-
-Return the roadmap in a well-formatted manner.
+1. Week 1
+2. Week 2
+3. Week 3
+4. Week 4
+5. Best Projects
+6. Best Free Resources
+7. Interview Tips
 `;
 
-    const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        contents: [
-          {
-            parts: [{ text: prompt }],
-          },
-        ],
-      }
-    );
+    const roadmap = await askAI(prompt);
 
-    // Dashboard Score Update
     await updateUserProgress(req.user.id, {
       progress: 15,
     });
 
     res.json({
       success: true,
-      roadmap:
-        response.data.candidates[0].content.parts[0].text,
+      roadmap,
     });
 
   } catch (error) {
 
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: error.response?.data || error.message,
     });
 
   }
@@ -406,41 +361,32 @@ Return the roadmap in a well-formatted manner.
 
 export const recommendJobs = async (req, res) => {
   try {
+
     const { skills, experience, location } = req.body;
 
     const prompt = `
-You are an AI Career Advisor.
+Recommend best jobs.
 
-Based on:
+Skills:
+${skills}
 
-Skills: ${skills}
-Experience: ${experience} years
-Location: ${location}
+Experience:
+${experience}
 
-Recommend:
+Location:
+${location}
 
-1. Top 10 Job Roles
-2. Expected Salary in India
-3. Top Hiring Companies
+Return:
+
+1. Top 10 Jobs
+2. Salary
+3. Companies
 4. Required Skills
 5. Future Demand
-6. Career Growth Tips
-
-Return in a clean, structured format.
 `;
 
-    const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        contents: [
-          {
-            parts: [{ text: prompt }],
-          },
-        ],
-      }
-    );
+    const jobs = await askAI(prompt);
 
-    // Dashboard Score Update
     await updateUserProgress(req.user.id, {
       career: 5,
       progress: 5,
@@ -448,15 +394,14 @@ Return in a clean, structured format.
 
     res.json({
       success: true,
-      jobs:
-        response.data.candidates[0].content.parts[0].text,
+      jobs,
     });
 
   } catch (error) {
 
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: error.response?.data || error.message,
     });
 
   }
@@ -470,38 +415,24 @@ export const chatWithAI = async (req, res) => {
 
     const { message } = req.body;
 
-    const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        contents: [
-          {
-            parts: [
-              {
-                text: message,
-              },
-            ],
-          },
-        ],
-      }
-    );
+    const reply = await askAI(message);
 
-    // Dashboard Score Update
     await updateUserProgress(req.user.id, {
       progress: 2,
     });
 
     res.json({
       success: true,
-      reply: response.data.candidates[0].content.parts[0].text,
+      reply,
     });
 
   } catch (error) {
 
-    console.log(error);
+    console.log(error.response?.data || error.message);
 
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: error.response?.data || error.message,
     });
 
   }
@@ -527,34 +458,18 @@ ${goal}
 
 Recommend 10 real-world projects.
 
-For each project provide:
+For every project provide:
 
 1. Project Name
 2. Difficulty
-3. Technologies Required
+3. Technologies
 4. Duration
-5. Short Description
+5. Description
 6. Learning Outcome
-
-Return in a clean format.
 `;
 
-    const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        contents: [
-          {
-            parts: [
-              {
-                text: prompt,
-              },
-            ],
-          },
-        ],
-      }
-    );
+    const projects = await askAI(prompt);
 
-    // Dashboard Score Update
     await updateUserProgress(req.user.id, {
       career: 15,
       progress: 10,
@@ -562,17 +477,16 @@ Return in a clean format.
 
     res.json({
       success: true,
-      projects:
-        response.data.candidates[0].content.parts[0].text,
+      projects,
     });
 
   } catch (error) {
 
-    console.log(error);
+    console.log(error.response?.data || error.message);
 
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: error.response?.data || error.message,
     });
 
   }
@@ -603,29 +517,13 @@ For every course provide:
 1. Course Name
 2. Difficulty
 3. Duration
-4. What will student learn
+4. What student will learn
 5. Why recommended
-6. Free learning resources
-
-Return in clean format.
+6. Free Resources
 `;
 
-    const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        contents: [
-          {
-            parts: [
-              {
-                text: prompt,
-              },
-            ],
-          },
-        ],
-      }
-    );
+    const courses = await askAI(prompt);
 
-    // Dashboard Score Update
     await updateUserProgress(req.user.id, {
       career: 5,
       progress: 15,
@@ -633,17 +531,16 @@ Return in clean format.
 
     res.json({
       success: true,
-      courses:
-        response.data.candidates[0].content.parts[0].text,
+      courses,
     });
 
   } catch (error) {
 
-    console.log(error);
+    console.log(error.response?.data || error.message);
 
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: error.response?.data || error.message,
     });
 
   }

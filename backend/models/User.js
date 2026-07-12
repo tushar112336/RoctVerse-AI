@@ -134,8 +134,21 @@ const userSchema = new mongoose.Schema(
     
     resumeHistory: [
   {
-    atsScore: Number,
-    fileName: String,
+    atsScore: {
+      type: Number,
+      default: 0,
+    },
+
+    fileName: {
+      type: String,
+      default: "",
+    },
+
+    analysis: {
+      type: String,
+      default: "",
+    },
+
     analyzedAt: {
       type: Date,
       default: Date.now,
