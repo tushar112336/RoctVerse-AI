@@ -4,7 +4,7 @@ import { Routes, Route } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import Hero from "./components/Hero";
 import Features from "./components/Features";
-import HowitWorks from "./components/HowitWorks";
+import HowitWorks from "./components/Howi tWorks";
 import DashboardPreview from "./components/DashboardPreview";
 import CareerRoadmap from "./components/CareerRoadmap";
 import ResumeAnalyzerPreview from "./components/ResumeAnalyzerPreview";
@@ -35,7 +35,7 @@ function LandingPage() {
       <Navbar />
       <Hero />
       <Features />
-      <HowItWorks />
+      <HowitWorks />
       <DashboardPreview />
       <CareerRoadmap />
       <ResumeAnalyzerPreview />
